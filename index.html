@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة التحكم - إدارة البلاغات والمواقع</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; }
+    </style>
+</head>
+<body class="bg-gray-100 flex flex-col h-screen overflow-hidden">
+
+    <!-- شريط العنوان -->
+    <header class="bg-blue-900 text-white p-4 shadow flex justify-between items-center">
+        <h1 class="text-xl font-bold">نظام متابعة البلاغات والتحكم (OMS)</h1>
+        <span id="totalCount" class="text-xs bg-blue-800 px-3 py-1 rounded-full">إجمالي المواقع: 0</span>
+    </header>
+
+    <!-- شريط الفلاتر والبحث -->
+    <div class="bg-white p-4 shadow border-b flex flex-wrap gap-4 items-center">
+        <div class="flex-1 min-w-[220px]">
+            <label for="searchInput" class="block text-xs font-semibold text-gray-600 mb-1">بحث بالاسم أو الرمز SubDepID:</label>
+            <input type="text" id="searchInput" placeholder="اكتب للبحث..." class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none">
+        </div>
+
+        <div class="w-48">
+            <label for="buildingFilter" class="block text-xs font-semibold text-gray-600 mb-1">تصفية حسب المبنى:</label>
+            <select id="buildingFilter" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none">
+                <option value="">جميع المباني</option>
+            </select>
+        </div>
+
+        <div class="w-48">
+            <label for="floorFilter" class="block text-xs font-semibold text-gray-600 mb-1">تصفية حسب الدور:</label>
+            <select id="floorFilter" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none">
+                <option value="">جميع الأدوار</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- جدول عرض نتائج المواقع -->
+    <main class="flex-1 overflow-auto p-4">
+        <div class="bg-white shadow rounded-lg overflow-hidden">
+            <table class="w-full text-right border-collapse">
+                <thead class="bg-gray-200 text-gray-700 text-sm">
+                    <tr>
+                        <th class="p-3 border-b">SubDepID</th>
+                        <th class="p-3 border-b">اسم الموقع</th>
+                        <th class="p-3 border-b">المبنى</th>
+                        <th class="p-3 border-b">الدور</th>
+                        <th class="p-3 border-b">القسم</th>
+                        <th class="p-3 border-b">وصف الغرفة</th>
+                    </tr>
+                </thead>
+                <tbody id="locationsTable" class="text-sm divide-y divide-gray-100">
+                </tbody>
+            </table>
+            
+            <div id="noDataMessage" class="hidden text-center p-8 text-gray-500">
+                لا توجد مواقع مطابقة لخيارات البحث.
+            </div>
+        </div>
+    </main>
+
+    <script>
+        let allLocations = [];
+
+        async function loadOMSData() {
+            try {
+                const response = await fetch('locations.json');
+                allLocations = await response.json();
+                
+                populateFilterOptions();
+                applyFilters();
+            } catch (error) {
+                console.error('خطأ في تحميل locations.json:', error);
+            }
+        }
+
+        // تعبئة الخيارات في المنسدلات تلقائياً من واقع ملف JSON
+        function populateFilterOptions() {
+            const buildingSelect = document.getElementById('buildingFilter');
+            const floorSelect = document.getElementById('floorFilter');
+
+            const buildings = [...new Set(allLocations.map(item => item.building).filter(Boolean))];
+            const floors = [...new Set(allLocations.map(item => item.floor).filter(Boolean))];
+
+            buildings.sort().forEach(b => {
+                const opt = document.createElement('option');
+                opt.value = b;
+                opt.textContent = b;
+                buildingSelect.appendChild(opt);
+            });
+
+            floors.sort().forEach(f => {
+                const opt = document.createElement('option');
+                opt.value = f;
+                opt.textContent = f;
+                floorSelect.appendChild(opt);
+            });
+        }
+
+        function applyFilters() {
+            const searchVal = document.getElementById('searchInput').value.trim().toLowerCase();
+            const buildingVal = document.getElementById('buildingFilter').value;
+            const floorVal = document.getElementById('floorFilter').value;
+
+            const filteredData = allLocations.filter(item => {
+                const matchesSearch = !searchVal || 
+                    (item.name && item.name.toLowerCase().includes(searchVal)) ||
+                    (item.SubDepID && String(item.SubDepID).toLowerCase().includes(searchVal)) ||
+                    (item.Room && item.Room.toLowerCase().includes(searchVal));
+
+                const matchesBuilding = !buildingVal || item.building === buildingVal;
+                const matchesFloor = !floorVal || item.floor === floorVal;
+
+                return matchesSearch && matchesBuilding && matchesFloor;
+            });
+
+            renderTable(filteredData);
+        }
+
+        function renderTable(data) {
+            const tableBody = document.getElementById('locationsTable');
+            const noDataMsg = document.getElementById('noDataMessage');
+            const totalCount = document.getElementById('totalCount');
+
+            totalCount.textContent = `المعرض: ${data.length} من أصل ${allLocations.length}`;
+            tableBody.innerHTML = '';
+
+            if (data.length === 0) {
+                noDataMsg.classList.remove('hidden');
+                return;
+            }
+
+            noDataMsg.classList.add('hidden');
+
+            data.forEach(item => {
+                const row = document.createElement('tr');
+                row.className = "hover:bg-blue-50 transition border-b";
+                row.innerHTML = `
+                    <td class="p-3 font-mono font-bold text-blue-900">${item.SubDepID || '-'}</td>
+                    <td class="p-3 font-semibold text-gray-800">${item.name || '-'}</td>
+                    <td class="p-3 text-gray-600">${item.building || '-'}</td>
+                    <td class="p-3 text-gray-600">${item.floor || '-'}</td>
+                    <td class="p-3 text-gray-500">${item.dept || '-'}</td>
+                    <td class="p-3 text-gray-500">${item.Room || '-'}</td>
+                `;
+                tableBody.appendChild(row);
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('searchInput').addEventListener('input', applyFilters);
+            document.getElementById('buildingFilter').addEventListener('change', applyFilters);
+            document.getElementById('floorFilter').addEventListener('change', applyFilters);
+
+            loadOMSData();
+        });
+    </script>
+</body>
+</html>
