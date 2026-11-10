@@ -1,0 +1,34 @@
+import pandas as pd
+import json
+
+# 1. قراءة ملف الإكسل
+file_path = 'OMS- Locations Log.xlsx'
+df = pd.read_excel(file_path, sheet_name='Location log')
+
+# 2. تنظيف أسماء أعمدة الإكسل من الفراغات الزائدة
+df.columns = df.columns.str.strip()
+
+# 3. حذف الأسطر الفارغة بالكامل في الأعمدة الرئيسية
+df_clean = df.dropna(subset=['SubDepID', 'Building', 'Floor'], how='all')
+
+# 4. إعادة تسمية/اختيار الأعمدة لكي تطابق ما يحتاجه تطبيق الـ HTML
+df_clean = df_clean.rename(columns={
+    'SubDepID': 'SubDepID',
+    'Site Name': 'name',
+    'Building': 'building',
+    'Floor': 'floor',
+    'Department': 'dept',
+    'Room Description': 'Room'
+})
+
+# 5. استبدال القيم الفارغة بنص فارغ
+df_clean = df_clean.fillna('')
+
+# 6. تحويل البيانات إلى قائمة مجلدات (JSON Records)
+records = df_clean.to_dict(orient='records')
+
+# 7. حفظ الملف باسم locations.json
+with open('locations.json', 'w', encoding='utf-8') as f:
+    json.dump(records, f, ensure_ascii=False, indent=2)
+
+print(f"تم بنجاح تحويل {len(records)} موقع وإحداثيات إلى ملف locations.json")
